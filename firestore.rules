@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: Check if user is admin
+    function isAdmin() {
+      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: Check if user owns this document
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuth() && (isAdmin() || isOwner(userId));
+      allow write: if isAdmin();
+    }
+
+    // Rooms collection
+    match /rooms/{roomId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Meter readings
+    match /meterReadings/{readingId} {
+      allow read: if isAuth() && (isAdmin() || resource.data.tenantId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // Bills
+    match /bills/{billId} {
+      allow read: if isAuth() && (isAdmin() || resource.data.tenantId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      allow read: if isAuth() && (isAdmin() || resource.data.tenantId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // Settings (global)
+    match /settings/{settingId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+  }
+}
