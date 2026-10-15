@@ -18,6 +18,7 @@ import type { UserProfile } from '@/types';
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
+  profileError: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -28,27 +29,33 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      setUserProfile(null);
+      setProfileError(null);
 
-      if (firebaseUser) {
-        const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (profileDoc.exists()) {
-          setUserProfile({
-            id: profileDoc.id,
-            ...profileDoc.data(),
-          } as UserProfile);
-        } else {
-          setUserProfile(null);
+      try {
+        if (firebaseUser) {
+          const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (profileDoc.exists()) {
+            setUserProfile({
+              id: profileDoc.id,
+              ...profileDoc.data(),
+            } as UserProfile);
+          }
         }
-      } else {
-        setUserProfile(null);
+      } catch (error) {
+        console.error('Failed to load the signed-in user profile from Firestore.', error);
+        setProfileError(
+          'Could not load your account profile from Firestore. Check your connection, Firestore rules, and whether a browser extension is blocking firestore.googleapis.com, then reload.'
+        );
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -61,10 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await signOut(auth);
     setUserProfile(null);
+    setProfileError(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, userProfile, profileError, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
